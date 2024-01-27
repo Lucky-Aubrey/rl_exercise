@@ -24,7 +24,7 @@ values_initial = np.sum(np.indices((maximum_cars_per_parking_lot+1, maximum_cars
 
 if __name__ == "__main__":
 
-    run_name = "standard_no_cost"
+    run_name = "excercise_solution"
     file_path = f'{run_name}_policy.pkl'
 
     if os.path.exists(file_path):

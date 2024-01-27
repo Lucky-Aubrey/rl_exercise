@@ -8,7 +8,8 @@ import os
 
 maximum_cars_per_parking_lot = 20
 rent = 10
-moving_cost = 0
+moving_cost = 2
+parking_cost = 4
 gamma = 0.9
 theta = 1
 lambda_returned_1 = 3
@@ -77,8 +78,20 @@ def expected_return(state, action, value_table):
     # State after cars are rented out
     state_after_rent = np.maximum(state_after_move - x[:,:,:,:,:2], np.zeros(2))
     
-    # Reward for moving and renting cars
-    r = np.sum(state_after_move - state_after_rent, axis=-1) * rent - np.abs(action) * moving_cost
+    # Reward as in exercise
+    r = np.sum(state_after_move - state_after_rent, axis=-1) * rent \
+        - np.abs(np.max(action-1,0)) * moving_cost \
+        - np.abs(np.min(action,0)) * moving_cost \
+        - np.sum(np.maximum(np.minimum(np.ones(2),state_after_rent-np.ones(2)*10), np.zeros(2)), axis=-1) * parking_cost
+    
+    # # Reward for moving and renting cars, with first 1 car moved for free to site A
+    # r = np.sum(state_after_move - state_after_rent, axis=-1) * rent \
+    #     - np.abs(np.max(action-1,0)) * moving_cost \
+    #     - np.abs(np.min(action,0)) * moving_cost
+    
+    # # Standard problem
+    # r = np.sum(state_after_move - state_after_rent, axis=-1) * rent \
+        # - np.abs(action) * moving_cost 
 
     # State after cars are returned
     state_after_return = np.minimum(state_after_rent + x[:,:,:,:,2:],np.array((maximum_cars_per_parking_lot,maximum_cars_per_parking_lot)))
