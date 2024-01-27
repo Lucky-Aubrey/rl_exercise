@@ -7,6 +7,8 @@ import os
 
 
 maximum_cars_per_parking_lot = 20
+rent = 10
+moving_cost = 0
 gamma = 0.9
 theta = 1
 lambda_returned_1 = 3
@@ -14,8 +16,8 @@ lambda_returned_2 = 2
 lambda_requested_1 = 3
 lambda_requested_2 = 4
 # x = np.transpose(np.indices((21,21,21,21)), axes=(1,2,3,4,0))
-x = np.transpose(np.indices((10,10,10,10)), axes=(1,2,3,4,0))
-# x = np.transpose(np.indices((8,8,8,8)), axes=(1,2,3,4,0))
+# x = np.transpose(np.indices((10,10,10,10)), axes=(1,2,3,4,0))
+x = np.transpose(np.indices((8,8,8,8)), axes=(1,2,3,4,0))
 
 # all to first parking lot
 def policy_1(cars, maximum_cars_movable):
@@ -63,61 +65,29 @@ def state_transition(action, state, maximum_cars_per_parking_lot):
 
     return state + np.array((action, -action)), action
 
-# def poisson(k, l):
-#     return np.maximum(np.power(l,k)/np.math.factorial(k)*np.exp(-l),0)
+def expected_return(state, action, value_table):
+        # state transition of moving cars
+    if action >= 0:
+        action = min(maximum_cars_per_parking_lot - state[0], state[1], action)
+    else:
+        action = -min(state[0], maximum_cars_per_parking_lot - state[1], -action)
 
-# def policy_evaluation(policy, value_table):
-    delta = 100000
-    gamma = 0.9
-    theta = 1
-    lambda_returned_1 = 3
-    lambda_returned_2 = 2
-    lambda_requested_1 = 3
-    lambda_requested_2 = 4
-    new_value_table = value_table.copy()
-    while delta > theta:
-        delta = 0
-        counter = 0
-        for i in range(0,21):
-            for j in range(0,21):
-                v = new_value_table[i,j]
-                new_value_table[i,j] = 0
-                state = np.array((i,j))
-                reward_sum = 0
-                for cars_returned_1 in range(21):
-                    for cars_returned_2 in range(21):
-                        for cars_requested_1 in range(21):
-                            for cars_requested_2 in range(21):
-                                
-                                action = policy[i,j]
-                                state_after_move, action_taken = state_transition(action=action,
-                                                                            state = state,
-                                                                            maximum_cars_per_parking_lot=20)
-                                
-                                state_after_rent = np.maximum(state_after_move+np.array((cars_requested_1,cars_requested_2)),
-                                                              np.zeros(2))
-                                
-                                r = np.sum(state_after_move - state_after_rent) * 10 - np.abs(action_taken) * 2
+    state_after_move = state + np.array((action, -action))
+    
+    # State after cars are rented out
+    state_after_rent = np.maximum(state_after_move - x[:,:,:,:,:2], np.zeros(2))
+    
+    # Reward for moving and renting cars
+    r = np.sum(state_after_move - state_after_rent, axis=-1) * rent - np.abs(action) * moving_cost
 
-                                state_after_return = np.minimum(state_after_rent + np.array((cars_returned_1, cars_returned_2)),np.array((20,20)))
-
-                                m, n = tuple(state_after_return)
-                                m = int(m)
-                                n = int(n)
-                                
-                                reward_sum += poisson(cars_returned_1, lambda_returned_1)\
-                                    *poisson(cars_returned_2, lambda_returned_2)\
-                                    *poisson(cars_requested_1, lambda_requested_1)\
-                                    *poisson(cars_requested_2, lambda_requested_2)\
-                                    +(r+gamma*new_value_table[m,n])
-                                counter +=1
-                                print(counter)
-                
-                new_value_table[i,j] = reward_sum
-
-                delta = np.maximum(delta, np.abs(v-new_value_table[i,j]))
-
-    return new_value_table
+    # State after cars are returned
+    state_after_return = np.minimum(state_after_rent + x[:,:,:,:,2:],np.array((maximum_cars_per_parking_lot,maximum_cars_per_parking_lot)))
+    
+    return np.sum(poisson.pmf(x[...,0], lambda_returned_1)\
+        *poisson.pmf(x[...,1], lambda_returned_2)\
+        *poisson.pmf(x[...,2], lambda_requested_1)\
+        *poisson.pmf(x[...,3], lambda_requested_2)\
+        *(r+gamma*value_table[state_after_return[:,:,:,:,0].astype(int),state_after_return[:,:,:,:,1].astype(int)]))
 
 def policy_evaluation(policy, value_table):
 
@@ -132,29 +102,8 @@ def policy_evaluation(policy, value_table):
                 v = new_value_table[i,j]
                 state = np.array((i,j))
                 action = policy[i,j]
-                
-                # state transition of moving cars
-                if action >= 0:
-                    action = min(maximum_cars_per_parking_lot - state[0], state[1], action)
-                else:
-                    action = -min(state[0], maximum_cars_per_parking_lot - state[1], -action)
 
-                state_after_move = state + np.array((action, -action))
-                
-                # State after cars are rented out
-                state_after_rent = np.maximum(state_after_move - x[:,:,:,:,:2], np.zeros(2))
-                
-                # Reward for moving and renting cars
-                r = np.sum(state_after_move - state_after_rent, axis=-1) * 10 - np.abs(action) * 2
-
-                # State after cars are returned
-                state_after_return = np.minimum(state_after_rent + x[:,:,:,:,2:],np.array((maximum_cars_per_parking_lot,maximum_cars_per_parking_lot)))
-                
-                new_value_table[i,j] = np.sum(poisson.pmf(x[...,0], lambda_returned_1)\
-                    *poisson.pmf(x[...,1], lambda_returned_2)\
-                    *poisson.pmf(x[...,2], lambda_requested_1)\
-                    *poisson.pmf(x[...,3], lambda_requested_2)\
-                    *(r+gamma*new_value_table[state_after_return[:,:,:,:,0].astype(int),state_after_return[:,:,:,:,1].astype(int)]))
+                new_value_table[i,j] = expected_return(state, action, new_value_table)
                 
                 delta = np.maximum(delta, np.abs(v-new_value_table[i,j]))
 
@@ -175,30 +124,10 @@ def policy_update(policy, value_table):
             old_action = new_policy[i,j]
 
             G_best = 0 # return
-            for action in range(max(-5,-i),min(6,j+1)):
+            for action in range(max(max(-5,-i),-(maximum_cars_per_parking_lot-j)),
+                                min(min(6,j+1),maximum_cars_per_parking_lot-i+1)):
                 
-                # state transition of moving cars
-                if action >= 0:
-                    action = min(maximum_cars_per_parking_lot - state[0], state[1], action)
-                else:
-                    action = -min(state[0], maximum_cars_per_parking_lot - state[1], -action)
-
-                state_after_move = state + np.array((action, -action))
-                
-                # State after cars are rented out
-                state_after_rent = np.maximum(state_after_move - x[:,:,:,:,:2], np.zeros(2))
-                
-                # Reward for moving and renting cars
-                r = np.sum(state_after_move - state_after_rent, axis=-1) * 10 - np.abs(action) * 2
-
-                # State after cars are returned
-                state_after_return = np.minimum(state_after_rent + x[:,:,:,:,2:],np.array((maximum_cars_per_parking_lot,maximum_cars_per_parking_lot)))
-                
-                G = np.sum(poisson.pmf(x[...,0], lambda_returned_1)\
-                    *poisson.pmf(x[...,1], lambda_returned_2)\
-                    *poisson.pmf(x[...,2], lambda_requested_1)\
-                    *poisson.pmf(x[...,3], lambda_requested_2)\
-                    *(r+gamma*value_table[state_after_return[:,:,:,:,0].astype(int),state_after_return[:,:,:,:,1].astype(int)]))
+                G = expected_return(state, action, value_table)
                 
                 if G > G_best:
                     G_best = G
@@ -268,55 +197,17 @@ def simulate(action=None, state=(0,0)):
         parking_hist.append(all_parking_lot_cars.copy())
     return profit, np.array(parking_hist)
 
-#
-# def policy_evaluation(values, policy):
-    
-#     counter = 0
-#     delta = 10000   
-#     while delta > 0.001 and counter < 1000:
-#         delta = 0      
+# def test_arr():
+#     arr = np.zeros((maximum_cars_per_parking_lot+1,maximum_cars_per_parking_lot+1))
+#     for i in range(0,maximum_cars_per_parking_lot+1):
+#         for j in range(0,maximum_cars_per_parking_lot+1):
+#             action_list = []
+#             for action in range(max(max(-5,-i),-(maximum_cars_per_parking_lot-j)),
+#                                 min(min(6,j+1),maximum_cars_per_parking_lot-i+1)):
+#                 arr[i,j] = action if (np.abs(action) > np.abs(arr[i,j])) else arr[i,j]
+#                 # action_list.append(action)
+#             # print(f'{(i,j)}',action_list)
+#     plt.imshow(arr, origin='lower')
+#     plt.show()
 
-#         # Loop over the states
-#         for i in range(values.shape[0]):
-#             for j in range(values.shape[1]):
-
-#                 v = values[i,j].copy()
-
-#                 a = policy[i,j].copy()
-
-#                 # Update action and determine next state
-#                 (m, n), a = state_transition(a, (i,j))
-                
-#                 # Update value given policy
-#                 values[i, j] = rewards[(i,j,a)] + gamma * values[int(m), int(n)]
-        
-#             delta = np.maximum(delta,np.abs(v-values[i, j]))
-
-#         print(f'counter: {counter}',f' delta: {delta}')
-#         counter += 1
-        
-#     return values
-    
-# def policy_update(policy, values):
-#     policy_stable = True
-#     new_policy=np.zeros_like(policy)
-#     for i in range(values.shape[0]):
-#         for j in range(values.shape[1]):
-
-#             old_action = policy[i,j]
-#             best_action = 0
-#             best_value = 0
-#             for candidate in list(range(-maximum_cars_movable,maximum_cars_movable+1)):
-#                 (m, n), a = state_transition(candidate, (i,j))
-#                 candidate_value = rewards[(i,j,a)] + gamma * values[m, n]
-
-#                 if candidate_value >= best_value:
-#                     best_value = candidate_value
-#                     best_action = a
-#             if old_action != best_action:
-#                 policy_stable = False
-#             new_policy[i,j] = best_action
-    
-#     print(f'Policy stable: {policy_stable}')
-#     return new_policy, policy_stable
-
+# test_arr()

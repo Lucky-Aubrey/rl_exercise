@@ -4,8 +4,8 @@ import pickle
 import os
 
 max_days = 100
-rent = 10
-moving_cost = 2
+# rent = 10
+# moving_cost = 0
 maximum_cars_per_parking_lot = 20
 maximum_cars_movable = 5
 
@@ -24,26 +24,26 @@ values_initial = np.sum(np.indices((maximum_cars_per_parking_lot+1, maximum_cars
 
 if __name__ == "__main__":
 
-    # values_next = policy_evaluation(values_initial, policy_initial)
-    # policy_next, _ = policy_update(policy_initial, values_initial)
-
-    policy_next, values_next = policy_iteration(policy_initial, values_initial)
-
-    run_name = "standard"
+    run_name = "standard_no_cost"
     file_path = f'{run_name}_policy.pkl'
-    with open(file_path, 'wb') as file:
-        pickle.dump(policy_next, file)
 
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as file:
+            policy_next = pickle.load(file)
+            values_next = policy_evaluation(policy_next, values_initial)
+
+    else:
+        policy_next, values_next = policy_iteration(policy_initial, values_initial)
+
+        with open(file_path, 'wb') as file:
+            pickle.dump(policy_next, file)
+
+    # create plots and save them
     fig1 = plot_colormap(values_next, fig_title=f'{run_name} - optimal value', show_fig=False)
     fig2 = plot_colormap(policy_next, fig_title=f'{run_name} - optimal policy', show_fig=False)
 
     fig1.savefig(f'{run_name}_optimal_value.png')
     fig2.savefig(f'{run_name}_optimal_policy.png')
-
-    # values_next = policy_evaluation(values_next, policy_next)
-    # policy_next, _ = policy_update(policy_next, values_next)
-
-
 
     import matplotlib.pyplot as plt
     plt.show()
