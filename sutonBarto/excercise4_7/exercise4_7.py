@@ -18,7 +18,8 @@ policy_initial = np.zeros((maximum_cars_per_parking_lot+1,maximum_cars_per_parki
 # policy_initial = np.ones((21,21)) * 5
 
 # Initiate random values
-values_initial = np.sum(np.indices((maximum_cars_per_parking_lot+1, maximum_cars_per_parking_lot+1)),axis=0)
+values_initial = np.zeros((maximum_cars_per_parking_lot+1, maximum_cars_per_parking_lot+1))
+# values_initial = np.sum(np.indices((maximum_cars_per_parking_lot+1, maximum_cars_per_parking_lot+1)),axis=0)
 
 
 
