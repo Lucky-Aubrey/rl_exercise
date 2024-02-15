@@ -10,8 +10,8 @@ FINISH_COLOR = "#FF0000"
 GAME_HEIGHT = 500
 GAME_WIDTH = 500
 SPACE_SIZE = 25
-START_BEGIN = 1
-START_END = 2
+START_BEGIN = 0
+START_END = 6
 FINISH_BEGIN = 0
 FINISH_END = 8
 
@@ -43,7 +43,7 @@ BORDER_BLOCKS = [[0]*20, # 1
 
 # Return
 RETURN_WIN = 1
-RETURN_LOOSE = -1
+RETURN_LOOSE = 0
 RETURN_TIME = 0
 
 # Policy iteration constants
@@ -123,9 +123,11 @@ class Car:
     def pick_action(self):
         global trials, SPEED
         state = (*self.coordinates, *self.velocity)
-        speed_switch = (trials < 100)
-        if not speed_switch: SPEED = 50 
-        if state in target_policy and random.random() > EPSILON:
+        speed_switch = (trials > 10000)
+        if speed_switch: SPEED = 50 
+        if state in target_policy and trials > 10000:
+            self.action = target_policy[state]
+        elif state in target_policy and random.random() > 0.1 and trials > 5000:
             self.action = target_policy[state]
         else:
             self.action = random.choice(ACTIONS)
@@ -133,11 +135,11 @@ class Car:
 
 def next_time_step(car):
 
-    global time_steps
+    global time_steps, success
 
     time_steps += 1
 
-    label.config(text="Try:{} ".format(trials)+"Time Steps:{}".format(time_steps))
+    label.config(text="Try:{} ".format(trials)+"Success:{} ".format(success)+"t:{}".format(time_steps))
 
     x, y = [car.coordinates[0] + car.velocity[0] * SPACE_SIZE, car.coordinates[1] + car.velocity[1] * SPACE_SIZE]
     canvas.delete(car.circle)
@@ -145,11 +147,10 @@ def next_time_step(car):
     if collision([x, y], car.coordinates):
         car.state_action_return_list.append([(car.coordinates[0], car.coordinates[1], car.velocity[0], car.velocity[1]), car.action, RETURN_LOOSE])
         reset_car(car)
-        
     elif win([x, y]):
         car.state_action_return_list.append([(car.coordinates[0], car.coordinates[1], car.velocity[0], car.velocity[1]), car.action, RETURN_WIN])
+        success += 1
         reset_car(car, new_episode=TRUE)
-
     else:
         car.state_action_return_list.append([(car.coordinates[0], car.coordinates[1], car.velocity[0], car.velocity[1]), car.action, RETURN_LOOSE])
         car.coordinates = [x, y]
@@ -167,10 +168,12 @@ def collision(new_coordinates, old_coordinates):
     
     p1 = np.array(new_coordinates) // SPACE_SIZE
     p2 = np.array(old_coordinates) // SPACE_SIZE
-    if np.sum(np.abs(p1-p2) <=1):
+    if np.sum(np.abs(p1-p2)) <=1:
         points_between = [(p1*SPACE_SIZE).tolist(), (p2*SPACE_SIZE).tolist()]
     else:
         points_between = (connect(np.array([p1,p2]))*SPACE_SIZE).tolist()
+        if old_coordinates not in points_between:
+            points_between.append(new_coordinates)
 
     if x < 0 or y < 0 or x >= GAME_WIDTH or y >= GAME_HEIGHT:
         return True
@@ -179,16 +182,61 @@ def collision(new_coordinates, old_coordinates):
     else:
         return False
     
+# def connect(ends):
+    # d0, d1 = np.diff(ends, axis=0)[0]
+    # if np.abs(d0) > np.abs(d1): 
+    #     return np.c_[np.arange(ends[0, 0], ends[1,0] + np.sign(d0), np.sign(d0), dtype=np.int32),
+    #                  np.arange(ends[0, 1] * np.abs(d0) + np.abs(d0)//2,
+    #                            ends[0, 1] * np.abs(d0) + np.abs(d0)//2 + (np.abs(d0)+1) * d1, d1, dtype=np.int32) // np.abs(d0)]
+    # else:
+    #     return np.c_[np.arange(ends[0, 0] * np.abs(d1) + np.abs(d1)//2,
+    #                            ends[0, 0] * np.abs(d1) + np.abs(d1)//2 + (np.abs(d1)+1) * d0, d0, dtype=np.int32) // np.abs(d1),
+    #                  np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)]
+
+#function COPIED from stack overflow - https://stackoverflow.com/questions/31097247/remove-duplicate-rows-of-a-numpy-array 
+def remove_np_duplicates(data):
+    # Perform lex sort and get sorted data
+    sorted_idx = np.lexsort(data.T)
+    sorted_data =  data[sorted_idx,:]
+
+    # Get unique row mask
+    row_mask = np.append([True],np.any(np.diff(sorted_data,axis=0),1))
+
+    # Get unique rows
+    out = sorted_data[row_mask]
+    return out
+
 def connect(ends):
-    d0, d1 = np.diff(ends, axis=0)[0]
-    if np.abs(d0) > np.abs(d1): 
-        return np.c_[np.arange(ends[0, 0], ends[1,0] + np.sign(d0), np.sign(d0), dtype=np.int32),
-                     np.arange(ends[0, 1] * np.abs(d0) + np.abs(d0)//2,
-                               ends[0, 1] * np.abs(d0) + np.abs(d0)//2 + (np.abs(d0)+1) * d1, d1, dtype=np.int32) // np.abs(d0)]
+    x1,y1 = ends[0]
+    x2,y2 = ends[1]
+    swap_coordinates = False
+    if x1 == x2:
+        swap_coordinates = True
+        x1, y1 = y1, x1
+        x2, y2 = y2, x2
+    dx = x2-x1 
+    dy = y2-y1
+
+    if dx == 0: # will divide by dx later, this will cause err. Catch this case up here
+        step = np.sign(dy)
+        ys = np.arange(0,dy+step,step)
+        xs = np.repeat(x1, ys.shape[0])
     else:
-        return np.c_[np.arange(ends[0, 0] * np.abs(d1) + np.abs(d1)//2,
-                               ends[0, 0] * np.abs(d1) + np.abs(d1)//2 + (np.abs(d1)+1) * d0, d0, dtype=np.int32) // np.abs(d1),
-                     np.arange(ends[0, 1], ends[1,1] + np.sign(d1), np.sign(d1), dtype=np.int32)]
+        m = dy/(dx+0.0)
+        b = y1 - m * x1 
+
+    step = 1.0/(max(abs(dx),abs(dy))) 
+    xs = np.arange(x1, x2, step * np.sign(x2-x1))
+    ys = xs * m + b
+
+    xs = np.rint(xs)
+    ys = np.rint(ys)
+    pts = np.column_stack((xs,ys))
+    pts = remove_np_duplicates(pts)
+    if swap_coordinates:
+        pts[:,0], pts[:,1] = pts[:,1], pts[:,0]
+
+    return pts.astype(int)
 
 
 def win(coordinates):
@@ -202,7 +250,7 @@ def reset_car(car, new_episode=False):
 
     global trials, time_steps, state_action_dic, target_policy
     # evaluate state action history
-    for state, action, r in car.state_action_return_list:
+    for state, action, r in car.state_action_return_list[::-1]:
         car.G = car.G * GAMMA + r
         if state in state_action_dic:
             state_action_dic[state][action]["C"] += car.weight
@@ -216,10 +264,9 @@ def reset_car(car, new_episode=False):
         
         target_policy[state] = max(state_action_dic[state], key=lambda d: state_action_dic[state][d]["Q"]) # get best action
 
+        # if action != target_policy[state]:
         if action != target_policy[state]:
             new_episode = True
-            trials -= 1
-            break
         else:
             car.weight = car.weight * (1 / (EPSILON/5))
 
@@ -261,10 +308,11 @@ window.resizable(False, False)
 # Trials, Time Steps, Velocity
 
 trials = 1
+success = 0
 time_steps = 0
 
 # Track Steps
-label = Label(window, text="Try:{} ".format(trials)+"Time Steps:{}".format(time_steps), font=('consolas', 20))
+label = Label(window, text="Try:{} ".format(trials)+"Success:{} ".format(success)+"t:{}".format(time_steps), font=('consolas', 20))
 label.pack()
 
 # Background
