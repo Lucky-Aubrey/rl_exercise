@@ -159,7 +159,7 @@ class sarsa_control:
 
         # proceed with next iteration of the loop, use A_new and S_new as A and S (S is already updated through self.coordinates)
         if self.trials < 5000:
-            self.window.after(0, self.loop, A_new)
+            self.window.after(50, self.loop, A_new)
         else:
             global EPSILON
             EPSILON = -1
